@@ -1,6 +1,7 @@
 #![no_std]
 
 pub mod fixtures;
+pub mod utils;
 
 use soroban_sdk::{
     contract, contracterror, contractimpl, contracttype, panic_with_error, Address, Env, Symbol,

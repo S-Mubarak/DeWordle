@@ -1,0 +1,23 @@
+[workspace]
+
+[package]
+name = "core-game-fuzz"
+version = "0.1.0"
+edition = "2021"
+publish = false
+description = "cargo-fuzz targets for core_game guess input sanitization"
+
+[dependencies]
+libfuzzer-sys = "0.4"
+core-game = { path = "../contracts/core_game" }
+dewordle-types = { path = "../crates/dewordle-types" }
+soroban-sdk = { version = "22.0.1", features = ["testutils"] }
+
+[profile.release]
+debug = 1
+
+[[bin]]
+name = "fuzz_guess_commitment"
+path = "fuzz_targets/fuzz_guess_commitment.rs"
+test = false
+doc = false
