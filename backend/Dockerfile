@@ -1,22 +1,26 @@
-# Dockerfile - multi-stage build optimization for backend service
-FROM node:20-alpine AS deps
-WORKDIR /app
-COPY package*.json ./
-RUN npm ci --only=production
+# syntax=docker/dockerfile:1
 
+# ── Stage 1: build ───────────────────────────────────────────────────────────
 FROM node:20-alpine AS builder
 WORKDIR /app
+
+# Install deps first (layer-cached until package files change)
 COPY package*.json ./
 RUN npm ci
+
+# Build TypeScript → dist/
 COPY . .
 RUN npm run build
 
-FROM node:20-alpine AS runner
+# ── Stage 2: runtime ─────────────────────────────────────────────────────────
+FROM node:20-alpine
 WORKDIR /app
-ENV NODE_ENV=production
-COPY --from=deps /app/node_modules ./node_modules
+
+COPY package*.json ./
+RUN npm ci --omit=dev && npm cache clean --force
+
 COPY --from=builder /app/dist ./dist
-COPY --from=builder /app/package.json ./package.json
 
 EXPOSE 3000
-CMD ["node", "dist/main.js"]
+
+CMD ["node", "dist/main"]
