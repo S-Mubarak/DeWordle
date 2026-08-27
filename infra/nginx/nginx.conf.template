@@ -1,0 +1,37 @@
+# nginx.conf.template - Nginx reverse proxy for DeWordle backend API
+# Replace {{API_PORT}} and {{DOMAIN}} with actual values
+
+upstream dewordle_backend {
+    server 127.0.0.1:{{API_PORT}};
+    keepalive 32;
+}
+
+server {
+    listen 80;
+    server_name {{DOMAIN}};
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;
+    server_name {{DOMAIN}};
+
+    ssl_certificate     /etc/ssl/certs/dewordle.crt;
+    ssl_certificate_key /etc/ssl/private/dewordle.key;
+
+    location /api/ {
+        proxy_pass http://dewordle_backend/;
+        proxy_http_version 1.1;
+        proxy_set_header Host $host;
+        proxy_set_header X-Real-IP $remote_addr;
+        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+        proxy_set_header Connection "";
+        proxy_connect_timeout 10s;
+        proxy_read_timeout 30s;
+    }
+
+    location / {
+        root /var/www/dewordle;
+        try_files $uri $uri/ /index.html;
+    }
+}
