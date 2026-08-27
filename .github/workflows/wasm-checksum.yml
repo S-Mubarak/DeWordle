@@ -1,0 +1,37 @@
+# .github/workflows/wasm-checksum.yml
+name: WASM Checksum Verifier
+
+on:
+  push:
+    paths:
+      - 'contracts/**'
+  pull_request:
+    paths:
+      - 'contracts/**'
+
+jobs:
+  verify-wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Stellar CLI
+        run: cargo install stellar-cli --locked
+
+      - name: Build WASM contract
+        run: |
+          cd contracts
+          cargo build --target wasm32-unknown-unknown --release
+
+      - name: Compute and verify checksum
+        run: |
+          WASM_FILE=
+          sha256sum "" | tee wasm-checksum.txt
+          echo "WASM checksum:"
+          cat wasm-checksum.txt
+
+      - name: Upload checksum artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: wasm-checksum
+          path: wasm-checksum.txt

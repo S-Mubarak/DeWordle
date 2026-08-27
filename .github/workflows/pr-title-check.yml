@@ -1,0 +1,31 @@
+# .github/workflows/pr-title-check.yml
+name: PR Title Check
+
+on:
+  pull_request:
+    types: [opened, edited, synchronize, reopened]
+
+jobs:
+  check-title:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Validate PR title
+        uses: amannn/action-semantic-pull-request@v5
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          types: |
+            feat
+            fix
+            docs
+            style
+            refactor
+            test
+            chore
+            ci
+            perf
+            revert
+          requireScope: false
+          subjectPattern: ^.{1,100}$
+          subjectPatternError: |
+            PR title must be between 1 and 100 characters.
