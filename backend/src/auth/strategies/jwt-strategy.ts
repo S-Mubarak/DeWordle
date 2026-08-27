@@ -1,8 +1,11 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, UnauthorizedException } from '@nestjs/common';
 import { PassportStrategy } from '@nestjs/passport';
 import { ExtractJwt, Strategy } from 'passport-jwt';
 import { ConfigService } from '@nestjs/config';
+import { plainToInstance } from 'class-transformer';
+import { validateSync } from 'class-validator';
 import { UserService } from 'src/user/user.service';
+import { JwtPayloadDto } from '../dto/jwt-payload.dto';
 
 @Injectable()
 export class JwtStrategy extends PassportStrategy(Strategy) {
@@ -22,8 +25,25 @@ export class JwtStrategy extends PassportStrategy(Strategy) {
     });
   }
 
-  async validate(payload: { sub: number; email: string }) {
-    const user = await this.userService.findById(payload.sub);
+  async validate(payload: Record<string, unknown>) {
+    // SEC-1220: enforce the token payload schema before trusting it.
+    // A valid signature is not enough — the payload must carry the
+    // required user identification fields (sub, email, roles).
+    const dto = plainToInstance(JwtPayloadDto, payload, {
+      exposeDefaultValues: true,
+    });
+    const errors = validateSync(dto, {
+      whitelist: true,
+      forbidNonWhitelisted: false,
+    });
+
+    if (errors.length > 0) {
+      throw new UnauthorizedException(
+        'Invalid token payload: missing or malformed user identification fields',
+      );
+    }
+
+    const user = await this.userService.findById(dto.sub);
     return user ?? null;
   }
 }

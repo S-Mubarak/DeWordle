@@ -33,6 +33,11 @@ export class DictionaryHelper {
   private readonly maxRetries = 3;
   private readonly baseDelay = 1000; // 1 second
 
+  /** In-memory LRU word cache: keyed by word, bounded by maxCacheSize. */
+  private readonly cache = new Map<string, EnrichedWord>();
+
+  constructor(private readonly maxCacheSize = 100) {}
+
   /**
    * Enriches a word with metadata from the dictionary API
    * @param word - The word to enrich
@@ -48,6 +53,13 @@ export class DictionaryHelper {
       word,
       isEnriched: false,
     };
+
+    // Cache hit: return the cached enrichment without any HTTP call.
+    const cached = this.getCached(word);
+    if (cached) {
+      this.logger.debug(`Cache hit for word: ${word}`);
+      return { ...cached };
+    }
 
     try {
       this.logger.log(`Attempting to enrich word: ${word}`);
@@ -68,6 +80,7 @@ export class DictionaryHelper {
       const wordData = apiResponse.data[0] as DictionaryApiResponse;
       const enrichedWord = this.transformApiResponse(wordData, baseWord);
 
+      this.setCached(word, enrichedWord);
       this.logger.log(`Successfully enriched word: ${word}`);
       return enrichedWord;
     } catch (error) {
@@ -177,6 +190,46 @@ export class DictionaryHelper {
     }
 
     return enriched;
+  }
+
+  /**
+   * Returns the cached enrichment for a word, refreshing its LRU
+   * position on access. Returns undefined on a miss.
+   */
+  private getCached(word: string): EnrichedWord | undefined {
+    const entry = this.cache.get(word);
+    if (!entry) return undefined;
+    // Refresh recency: re-insert so the entry is the most-recently-used.
+    this.cache.delete(word);
+    this.cache.set(word, entry);
+    return entry;
+  }
+
+  /**
+   * Stores an enrichment in the cache, evicting the least-recently-used
+   * entry when the cache capacity is reached.
+   */
+  private setCached(word: string, entry: EnrichedWord): void {
+    if (this.cache.has(word)) this.cache.delete(word);
+    this.cache.set(word, entry);
+
+    if (this.cache.size > this.maxCacheSize) {
+      const oldest = this.cache.keys().next().value;
+      if (oldest !== undefined) {
+        this.cache.delete(oldest);
+        this.logger.debug(`Cache evicted word: ${oldest}`);
+      }
+    }
+  }
+
+  /** Current number of entries in the in-memory cache. */
+  getCacheSize(): number {
+    return this.cache.size;
+  }
+
+  /** True when the given word is currently cached. */
+  isCached(word: string): boolean {
+    return this.cache.has(word);
   }
 
   /**

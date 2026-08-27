@@ -25,6 +25,7 @@ import { CacheMetricsService } from './common/cache-metrics.service';
 import { CacheLoggerService } from './common/cache-logger.service';
 import { VersioningModule } from './common/versioning.module';
 import { JobModule } from './common/job.module';
+import { HealthModule } from './health/health.module';
 
 @Module({
   imports: [
@@ -104,6 +105,7 @@ import { JobModule } from './common/job.module';
     AppCacheModule,
     VersioningModule,
     JobModule,
+    HealthModule,
   ],
   controllers: [
     AppController,
