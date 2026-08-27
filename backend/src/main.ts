@@ -60,6 +60,9 @@ async function bootstrap() {
 
     const app = await NestFactory.create(AppModule);
 
+    // Issue #1212: HSTS security headers (max-age=31536000, includeSubDomains).
+    applySecurityHeaders(app);
+
     const metricsService = app.get(MetricsService);
     app.useGlobalInterceptors(new MetricsInterceptor(metricsService));
     app.useGlobalFilters(new GlobalExceptionFilter());

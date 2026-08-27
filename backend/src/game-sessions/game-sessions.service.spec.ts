@@ -13,6 +13,7 @@ import { WordValidationService } from '../dewordle/words/word-validation.service
 import { EnrichedWord } from '../utils/dictionary.helper';
 import { Repository } from 'typeorm';
 import { GuessHistory } from './entities/guess-history.entity';
+import { submitGuessProvider } from './providers/submit-guess';
 import { evaluateGuess, LetterEvaluation } from '../dewordle/wordle.engine';
 import { GameSessionStatus } from './game-sessions.constants';
 
@@ -59,8 +60,18 @@ describe('GameSessionsService', () => {
       findOne: jest.fn(),
     };
 
+    const trackedListeners = new Map<string, (...args: unknown[]) => void>();
     mockEventEmitter = {
       emit: jest.fn(),
+      on: jest.fn((event: string, handler: (...args: unknown[]) => void) => {
+        trackedListeners.set(event, handler);
+      }),
+      removeListener: jest.fn((event: string) => {
+        trackedListeners.delete(event);
+      }),
+      listenerCount: jest.fn((event: string) =>
+        trackedListeners.has(event) ? 1 : 0,
+      ),
     };
 
     mockLeaderboardService = {
@@ -111,6 +122,10 @@ describe('GameSessionsService', () => {
           provide: WordValidationService,
           useValue: mockWordValidationService,
         },
+        {
+          provide: submitGuessProvider,
+          useValue: { submitGuess: jest.fn() },
+        },
       ],
     }).compile();
 
@@ -119,6 +134,29 @@ describe('GameSessionsService', () => {
 
   it('should be defined', () => {
     expect(service).toBeDefined();
+  });
+
+  describe('event listener lifecycle (Issue #1215)', () => {
+    it('registers the session.completed listener on module init', () => {
+      service.onModuleInit();
+      expect(mockEventEmitter.on).toHaveBeenCalledWith(
+        'session.completed',
+        expect.any(Function),
+      );
+      expect(mockEventEmitter.listenerCount('session.completed')).toBe(1);
+    });
+
+    it('unregisters all listeners on module destroy to avoid leaked handles', () => {
+      service.onModuleInit();
+      expect(mockEventEmitter.listenerCount('session.completed')).toBe(1);
+
+      service.onModuleDestroy();
+      expect(mockEventEmitter.removeListener).toHaveBeenCalledWith(
+        'session.completed',
+        expect.any(Function),
+      );
+      expect(mockEventEmitter.listenerCount('session.completed')).toBe(0);
+    });
   });
 
   describe('create', () => {

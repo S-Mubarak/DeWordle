@@ -41,7 +41,11 @@ export class WordScheduler implements OnModuleInit {
     await this.ensureTodayWord();
   }
 
-  @Cron(process.env.DAILY_WORD_SCHEDULE || CronExpression.EVERY_DAY_AT_MIDNIGHT)
+  @Cron(process.env.DAILY_WORD_SCHEDULE || CronExpression.EVERY_DAY_AT_MIDNIGHT, {
+    // Issue #1219: run on a fixed UTC schedule so deployment-local server
+    // time can never shift the daily word selection.
+    timeZone: process.env.DAILY_WORD_TIMEZONE || 'UTC',
+  })
   async handleDailyWordSelection() {
     await this.ensureTodayWord();
   }
@@ -50,7 +54,13 @@ export class WordScheduler implements OnModuleInit {
     const timezone =
       this.configService.get<string>('DAILY_WORD_TIMEZONE') || 'UTC';
     const today = moment().tz(timezone).startOf('day').format('YYYY-MM-DD');
-    const todayDate = new Date(today);
+    // Store the puzzle date as a UTC ISO timestamp: midnight in the schedule
+    // timezone, converted to UTC (Issue #1219).
+    const todayDate = moment
+      .tz(today, timezone)
+      .startOf('day')
+      .utc()
+      .toDate();
 
     const existing = await this.wordRepo.findOneBy({ dailyDate: todayDate });
     if (existing) {

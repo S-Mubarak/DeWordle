@@ -207,6 +207,8 @@ impl RewardsContract {
         2
     }
 
+    /// Role-based access control check (Issue #1206): verifies the invocation
+    /// origin is the configured admin via Soroban's `require_auth`.
     fn require_admin(env: &Env) {
         let admin: Address = env
             .storage()
@@ -286,6 +288,42 @@ mod tests {
         let player = Address::generate(&env);
         let reason = Symbol::new(&env, "win");
         client.accrue(&player, &100, &1, &reason);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_reward_without_admin_auth_panics() {
+        // No mock_all_auths: the caller cannot authenticate as the admin role,
+        // so the require_auth check must reject the invocation (Issue #1206).
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(RewardsContract, ());
+        let client = RewardsContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+    }
+
+    #[test]
+    fn distribute_reward_increases_recipient_balance() {
+        let (env, _, contract_id) = setup();
+        let client = RewardsContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+        assert_eq!(client.balance_of(&recipient), 100);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_reward_nonce_replay_panics() {
+        let (env, _, contract_id) = setup();
+        let client = RewardsContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+        client.distribute_reward(&recipient, &100, &1, &reason);
     }
 
     #[test]

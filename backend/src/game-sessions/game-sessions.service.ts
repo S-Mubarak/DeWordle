@@ -1,8 +1,11 @@
 import {
   Injectable,
+  Logger,
   NotFoundException,
   BadRequestException,
   ConflictException,
+  OnModuleDestroy,
+  OnModuleInit,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
@@ -22,7 +25,17 @@ import { GameSessionStatus, MAX_ATTEMPTS } from './game-sessions.constants';
 import { SessionCompletedEvent } from './enums/sessionStatus';
 
 @Injectable()
-export class GameSessionsService {
+export class GameSessionsService implements OnModuleInit, OnModuleDestroy {
+  private readonly logger = new Logger(GameSessionsService.name);
+
+  /**
+   * Handler registered for the `session.completed` event. Tracked as an
+   * instance property so it can be unregistered on teardown (Issue #1215).
+   */
+  private readonly sessionCompletedHandler = (session: GameSession): void => {
+    this.logger.debug(`Session completed event received: ${session.id}`);
+  };
+
   constructor(
     @InjectRepository(GameSession)
     private sessionRepo: Repository<GameSession>,
@@ -36,6 +49,21 @@ export class GameSessionsService {
     @InjectRepository(GuessHistory)
     private readonly guessHistoryRepo: Repository<GuessHistory>,
   ) {}
+
+  onModuleInit() {
+    // Subscribe to the session-completed event this service emits, keeping
+    // the subscription tracked for explicit teardown.
+    this.eventEmitter.on('session.completed', this.sessionCompletedHandler);
+  }
+
+  onModuleDestroy() {
+    // Issue #1215: unregister all event listeners owned by this service so
+    // application shutdown does not leak event emitter handles.
+    this.eventEmitter.removeListener(
+      'session.completed',
+      this.sessionCompletedHandler,
+    );
+  }
 
   async create(createDto: CreateSessionDto, user: User | null) {
     // Validate game exists
