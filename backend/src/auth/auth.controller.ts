@@ -20,6 +20,7 @@ import {
   ApiConflictResponse,
   ApiBadRequestResponse,
 } from '@nestjs/swagger';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService } from './auth.service';
 import { LoginDto } from './dto/login.dto';
 import { SignupDto } from './dto/sign-up.dto';
@@ -27,6 +28,7 @@ import { JwtAuthGuard } from './guards/jwt-guard.guard';
 import { ForgotPasswordDto } from './dto/forgot-password.dto';
 import { ResetPasswordDto } from './dto/reset-password.dto';
 import { RefreshTokenDto } from './dto/refresh-token.dto';
+import { AUTH_THROTTLE } from '../common/guards/throttle.config';
 
 @ApiTags('Authentication')
 @Controller('auth')
@@ -34,6 +36,7 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('forgot-password')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Request password reset',
@@ -121,6 +124,7 @@ export class AuthController {
   }
 
   @Post('signup')
+  @Throttle(AUTH_THROTTLE)
   @HttpCode(HttpStatus.CREATED)
   @ApiOperation({
     summary: 'User registration',
