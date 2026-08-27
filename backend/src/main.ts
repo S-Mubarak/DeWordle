@@ -5,12 +5,16 @@ import { AppModule } from './app.module';
 import { RateLimitHeadersInterceptor } from './common/rate-limit-headers.interceptor';
 import { MetricsService } from './dewordle/metrics/metrics.service';
 import { MetricsInterceptor } from './common/metrics.interceptor';
+import { applySecurityHeaders } from './common/security/security-headers';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   try {
     const app = await NestFactory.create(AppModule);
+
+    // Issue #1212: HSTS security headers (max-age=31536000, includeSubDomains).
+    applySecurityHeaders(app);
 
     const metricsService = app.get(MetricsService);
     app.useGlobalInterceptors(new MetricsInterceptor(metricsService));

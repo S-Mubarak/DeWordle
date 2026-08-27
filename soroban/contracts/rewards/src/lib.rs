@@ -123,6 +123,43 @@ impl RewardsContract {
         env.storage().persistent().get(&DataKey::Emission(day_id))
     }
 
+    /// Distribute a reward to a recipient.
+    ///
+    /// Role-based access control (Issue #1206): the invocation origin is
+    /// verified with `require_auth` against the configured admin role before
+    /// any state is mutated, so direct calls from unauthorized addresses are
+    /// rejected with `RewardsError::Unauthorized`.
+    pub fn distribute_reward(
+        env: Env,
+        recipient: Address,
+        amount: u64,
+        nonce: u64,
+        reason: Symbol,
+    ) {
+        Self::require_admin(&env);
+
+        if env
+            .storage()
+            .persistent()
+            .has(&DataKey::Nonce(recipient.clone(), nonce))
+        {
+            panic_with_error!(&env, RewardsError::InvalidNonce);
+        }
+
+        let balance = Self::balance_of(env.clone(), recipient.clone());
+        env.storage()
+            .persistent()
+            .set(&DataKey::Balance(recipient.clone()), &(balance + amount));
+        env.storage()
+            .persistent()
+            .set(&DataKey::Nonce(recipient.clone(), nonce), &true);
+
+        env.events().publish(
+            (Symbol::new(&env, "reward_distributed"), recipient, reason),
+            (amount, nonce),
+        );
+    }
+
     pub fn version(env: Env) -> u32 {
         env.events().publish(
             (Symbol::new(&env, "module"), Symbol::new(&env, "rewards")),
@@ -131,6 +168,8 @@ impl RewardsContract {
         2
     }
 
+    /// Role-based access control check (Issue #1206): verifies the invocation
+    /// origin is the configured admin via Soroban's `require_auth`.
     fn require_admin(env: &Env) {
         let admin: Address = env
             .storage()
@@ -210,6 +249,42 @@ mod tests {
         let player = Address::generate(&env);
         let reason = Symbol::new(&env, "win");
         client.accrue(&player, &100, &1, &reason);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_reward_without_admin_auth_panics() {
+        // No mock_all_auths: the caller cannot authenticate as the admin role,
+        // so the require_auth check must reject the invocation (Issue #1206).
+        let env = Env::default();
+        let admin = Address::generate(&env);
+        let contract_id = env.register(RewardsContract, ());
+        let client = RewardsContractClient::new(&env, &contract_id);
+        client.init(&admin);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+    }
+
+    #[test]
+    fn distribute_reward_increases_recipient_balance() {
+        let (env, _, contract_id) = setup();
+        let client = RewardsContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+        assert_eq!(client.balance_of(&recipient), 100);
+    }
+
+    #[test]
+    #[should_panic]
+    fn distribute_reward_nonce_replay_panics() {
+        let (env, _, contract_id) = setup();
+        let client = RewardsContractClient::new(&env, &contract_id);
+        let recipient = Address::generate(&env);
+        let reason = Symbol::new(&env, "win");
+        client.distribute_reward(&recipient, &100, &1, &reason);
+        client.distribute_reward(&recipient, &100, &1, &reason);
     }
 
     #[test]

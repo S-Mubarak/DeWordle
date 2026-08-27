@@ -19,3 +19,8 @@ pub const TOPIC_ACCRUED: &str = "accrued";
 /// topic: ("claimed", player: Address)
 /// payload: amount: u64
 pub const TOPIC_CLAIMED: &str = "claimed";
+
+/// Event: reward_distributed
+/// topic: ("reward_distributed", recipient: Address, reason: Symbol)
+/// payload: (amount: u64, nonce: u64)
+pub const TOPIC_REWARD_DISTRIBUTED: &str = "reward_distributed";
