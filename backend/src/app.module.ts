@@ -25,6 +25,7 @@ import { CacheMetricsService } from './common/cache-metrics.service';
 import { CacheLoggerService } from './common/cache-logger.service';
 import { VersioningModule } from './common/versioning.module';
 import { JobModule } from './common/job.module';
+import { PoolPressureService } from './database/pool-pressure.service';
 
 @Module({
   imports: [
@@ -91,6 +92,37 @@ import { JobModule } from './common/job.module';
         logging: configService.get('NODE_ENV') === 'development',
         migrations: ['dist/migrations/*{.ts,.js}'],
         migrationsTableName: 'migrations',
+        // DB-POOL-1210: connection pool exhaustion resilience.
+        extra: {
+          max: Number.parseInt(
+            configService.get('DB_POOL_MAX') ?? '20',
+            10,
+          ),
+          min: Number.parseInt(
+            configService.get('DB_POOL_MIN') ?? '2',
+            10,
+          ),
+          connectionTimeoutMillis: Number.parseInt(
+            configService.get('DB_POOL_CONNECTION_TIMEOUT_MS') ?? '10000',
+            10,
+          ),
+          idleTimeoutMillis: Number.parseInt(
+            configService.get('DB_POOL_IDLE_TIMEOUT_MS') ?? '30000',
+            10,
+          ),
+          statement_timeout: Number.parseInt(
+            configService.get('DB_POOL_STATEMENT_TIMEOUT_MS') ?? '10000',
+            10,
+          ),
+          query_timeout: Number.parseInt(
+            configService.get('DB_POOL_QUERY_TIMEOUT_MS') ?? '10000',
+            10,
+          ),
+          maxUses: Number.parseInt(
+            configService.get('DB_POOL_MAX_USES') ?? '7500',
+            10,
+          ),
+        },
       }),
       inject: [ConfigService],
     }),
@@ -115,6 +147,7 @@ import { JobModule } from './common/job.module';
     AppService,
     CacheLoggerService,
     CacheMetricsService,
+    PoolPressureService,
     {
       provide: 'APP_GUARD',
       useClass: WalletRateLimitGuard,

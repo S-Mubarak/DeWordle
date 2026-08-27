@@ -13,6 +13,7 @@ import {
 import { randomUUID } from 'crypto';
 import { INDEXER_STREAM_CORE_GAME } from './indexer.constants';
 import { ReplayAlertService } from './queue/replay-alert.service';
+import { EventDedupService } from './dedup/event-dedup.service';
 import { sanitizeErrorMessage } from '../common/redaction';
 
 export interface IndexerLogContext {
@@ -66,11 +67,28 @@ export class IndexerService {
     private readonly cursorService: CursorService,
     private readonly configService: ConfigService,
     private readonly replayAlertService: ReplayAlertService,
+    private readonly eventDedupService: EventDedupService,
   ) {}
 
   async ingest(event: IngestedEventDto, context?: IndexerLogContext) {
     const t0 = Date.now();
     try {
+      // IDX-DEDUP-1214: skip events already processed within the TTL
+      // window (Soroban RPC can redeliver events during reconnects).
+      if (
+        await this.eventDedupService.isDuplicate(event.txHash, event.eventIndex)
+      ) {
+        this.logger.debug({
+          msg: 'indexer.ingest.duplicate_skipped',
+          correlationId: context?.correlationId,
+          topic: event.topic,
+          ledger: event.ledger,
+          txHash: event.txHash,
+          eventIndex: event.eventIndex,
+        });
+        return;
+      }
+
       await this.eventProcessor.process(event, context);
       await this.cursorService.checkpoint(
         event.network,
@@ -106,8 +124,7 @@ export class IndexerService {
   async getLagSnapshot(): Promise<IndexerLagSnapshot> {
     const network =
       (this.configService.get<string>('SOROBAN_NETWORK') as
-        | 'testnet'
-        | 'mainnet') || 'testnet';
+        'testnet' | 'mainnet') || 'testnet';
     const rpcUrl = this.configService.get<string>('SOROBAN_RPC_URL');
     const cursor = await this.cursorService.getOrCreate(
       network,
@@ -175,8 +192,7 @@ export class IndexerService {
   async poll(context?: IndexerLogContext): Promise<number> {
     const network =
       (this.configService.get<string>('SOROBAN_NETWORK') as
-        | 'testnet'
-        | 'mainnet') || 'testnet';
+        'testnet' | 'mainnet') || 'testnet';
     const rpcUrl = this.configService.get<string>('SOROBAN_RPC_URL');
     const contractId = this.configService.get<string>(
       'SOROBAN_CORE_GAME_CONTRACT_ID',
