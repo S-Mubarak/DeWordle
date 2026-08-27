@@ -16,6 +16,7 @@ jest.mock('@nestjs/common', () => ({
     log: jest.fn(),
     warn: jest.fn(),
     error: jest.fn(),
+    debug: jest.fn(),
   })),
 }));
 
@@ -216,6 +217,140 @@ describe('DictionaryHelper', () => {
       expect(mockedAxios.get).toHaveBeenCalledTimes(2); // Initial call + 1 retry
     });
 
+  describe('in-memory caching layer', () => {
+    const mockApiResponse: DictionaryApiResponse = {
+      word: 'crane',
+      phonetics: [{ text: '/kreɪn/' }],
+      meanings: [
+        {
+          partOfSpeech: 'noun',
+          definitions: [{ definition: 'A large bird' }],
+        },
+      ],
+    };
+
+    const respondOnce = () => {
+      mockedAxios.get.mockResolvedValueOnce({
+        data: [mockApiResponse],
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {},
+      });
+    };
+
+    it('cache hit returns word data without making outgoing HTTP requests', async () => {
+      respondOnce();
+
+      const first = await dictionaryHelper.enrichWordWithMetadata(
+        'crane',
+        'uuid-1',
+      );
+      expect(first.isEnriched).toBe(true);
+
+      const callsAfterFirst = mockedAxios.get.mock.calls.length;
+
+      const second = await dictionaryHelper.enrichWordWithMetadata(
+        'crane',
+        'uuid-2',
+      );
+
+      expect(second.isEnriched).toBe(true);
+      expect(second.definition).toBe('A large bird');
+      expect(mockedAxios.get.mock.calls.length).toBe(callsAfterFirst);
+      expect(dictionaryHelper.isCached('crane')).toBe(true);
+    });
+
+    it('cache miss triggers HTTP fetch and populates the cache entry', async () => {
+      expect(dictionaryHelper.isCached('crane')).toBe(false);
+      respondOnce();
+
+      const result = await dictionaryHelper.enrichWordWithMetadata(
+        'crane',
+        'uuid-1',
+      );
+
+      expect(result.isEnriched).toBe(true);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(1);
+      expect(dictionaryHelper.isCached('crane')).toBe(true);
+      expect(dictionaryHelper.getCacheSize()).toBe(1);
+    });
+
+    it('cache is per-instance and keyed by word', async () => {
+      respondOnce();
+      await dictionaryHelper.enrichWordWithMetadata('crane', 'uuid-1');
+
+      // A different word misses the cache and triggers a fetch.
+      mockedAxios.get.mockResolvedValueOnce({
+        data: [{ ...mockApiResponse, word: 'stork' }],
+        status: 200,
+        statusText: 'OK',
+        headers: {},
+        config: {},
+      });
+      const other = await dictionaryHelper.enrichWordWithMetadata(
+        'stork',
+        'uuid-2',
+      );
+      expect(other.isEnriched).toBe(true);
+      expect(mockedAxios.get).toHaveBeenCalledTimes(2);
+      expect(dictionaryHelper.getCacheSize()).toBe(2);
+    });
+
+    it('evicts the least-recently-used entry when capacity is reached', async () => {
+      const small = new DictionaryHelper(2);
+      const respond = (word: string) =>
+        mockedAxios.get.mockResolvedValueOnce({
+          data: [{ ...mockApiResponse, word }],
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {},
+        });
+
+      respond('alpha');
+      respond('bravo');
+      respond('charlie');
+
+      await small.enrichWordWithMetadata('alpha', '1');
+      await small.enrichWordWithMetadata('bravo', '2');
+      expect(small.getCacheSize()).toBe(2);
+
+      await small.enrichWordWithMetadata('charlie', '3');
+      expect(small.getCacheSize()).toBe(2);
+      expect(small.isCached('alpha')).toBe(false); // evicted (LRU)
+      expect(small.isCached('bravo')).toBe(true);
+      expect(small.isCached('charlie')).toBe(true);
+    });
+
+    it('recently accessed entries survive eviction (LRU refresh)', async () => {
+      const small = new DictionaryHelper(2);
+      const respond = (word: string) =>
+        mockedAxios.get.mockResolvedValueOnce({
+          data: [{ ...mockApiResponse, word }],
+          status: 200,
+          statusText: 'OK',
+          headers: {},
+          config: {},
+        });
+
+      respond('alpha');
+      respond('bravo');
+      respond('charlie');
+
+      await small.enrichWordWithMetadata('alpha', '1');
+      await small.enrichWordWithMetadata('bravo', '2');
+
+      // Touch alpha so bravo becomes the least-recently-used.
+      await small.enrichWordWithMetadata('alpha', '1');
+
+      await small.enrichWordWithMetadata('charlie', '3');
+      expect(small.isCached('alpha')).toBe(true);
+      expect(small.isCached('bravo')).toBe(false);
+    });
+  });
+
+  describe('enrichWordWithMetadata (HTTP behavior)', () => {
     it('should respect maximum retry attempts', async () => {
       const mockError = {
         response: { status: 500 },
@@ -232,7 +367,7 @@ describe('DictionaryHelper', () => {
       });
 
       const result = await dictionaryHelper.enrichWordWithMetadata(
-        mockWord,
+        'blizzard',
         mockWordId,
       );
 
@@ -240,4 +375,5 @@ describe('DictionaryHelper', () => {
       expect(mockedAxios.get).toHaveBeenCalledTimes(3); // Initial call + 2 retries (max 3 attempts)
     });
   });
+});
 });

@@ -20,7 +20,12 @@ pub const TOPIC_ACCRUED: &str = "accrued";
 /// payload: amount: u64
 pub const TOPIC_CLAIMED: &str = "claimed";
 
-/// Event: reward_distributed
-/// topic: ("reward_distributed", recipient: Address, reason: Symbol)
-/// payload: (amount: u64, nonce: u64)
-pub const TOPIC_REWARD_DISTRIBUTED: &str = "reward_distributed";
+/// Event: win_recorded
+/// topic: ("win_recorded", player: Address)
+/// payload: games_won: u32
+pub const TOPIC_WIN_RECORDED: &str = "win_recorded";
+
+/// Event: rank_set
+/// topic: ("rank_set", player: Address)
+/// payload: rank: u32
+pub const TOPIC_RANK_SET: &str = "rank_set";
