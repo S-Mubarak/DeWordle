@@ -9,6 +9,7 @@ const withBundleAnalyzer = bundleAnalyzer({
  * PERF-104: Frontend image optimisation with WebP/AVIF and lazy loading.
  */
 const nextConfig: NextConfig = {
+  output: "standalone",
   transpilePackages: ["@dewordle/soroban-sdk"],
 
   images: {
