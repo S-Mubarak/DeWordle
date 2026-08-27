@@ -264,6 +264,13 @@ body {
   border-radius: 2px;
 }
 
+.dark *:focus-visible {
+  outline-color: #818cf8;
+  outline-width: 2px;
+  outline-offset: 2px;
+  box-shadow: 0 0 0 4px rgba(129, 140, 248, 0.3);
+}
+
 .sr-only {
   position: absolute;
   width: 1px;
