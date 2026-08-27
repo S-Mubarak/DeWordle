@@ -9,6 +9,7 @@ This directory contains Architecture Decision Records (ADRs) for the DeWordle pr
 | [0001](./0001-soroban-foundation-boundaries.md) | Soroban Foundation Boundaries | Accepted | 2024-01 |
 | [0002](./0002-backend-caching-strategy.md) | Backend Caching Strategy | Accepted | 2024-07 |
 | [0003](./0003-frontend-accessibility-standards.md) | Frontend Accessibility Standards | Accepted | 2024-07 |
+| [0004](./0004-frontend-state-store-selection.md) | Frontend State Store Selection | Proposed | 2024-08 |
 | [0004](./0004-error-handling-and-logging-standards.md) | Error Handling and Logging Standards | Proposed | 2024-08 |
 
 ## Status Tags
