@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { TypeOrmModule } from '@nestjs/typeorm';
+import Redis from 'ioredis';
 import { IndexerController } from './indexer.controller';
 import { IndexerService } from './indexer.service';
 import { EventProcessorService } from './processors/event-processor.service';
@@ -20,6 +21,12 @@ import { RewardSummaryService } from './reward-summary.service';
 import { RewardSummaryController } from './reward-summary.controller';
 import { AuditTrailService } from './audit-trail.service';
 import { AuditController } from './audit-trail.controller';
+import {
+  EventDedupService,
+  RedisEventDedupCache,
+} from './dedup/event-dedup.service';
+
+export const INDEXER_REDIS_CLIENT = 'INDEXER_REDIS_CLIENT';
 
 @Module({
   imports: [
@@ -45,6 +52,24 @@ import { AuditController } from './audit-trail.controller';
     RegistrySnapshotService,
     RewardSummaryService,
     AuditTrailService,
+    {
+      provide: INDEXER_REDIS_CLIENT,
+      useFactory: (): Redis =>
+        new Redis({
+          host: process.env.REDIS_HOST || 'localhost',
+          port: Number.parseInt(process.env.REDIS_PORT || '6379', 10),
+          lazyConnect: true,
+          maxRetriesPerRequest: 1,
+          enableOfflineQueue: false,
+        }),
+    },
+    {
+      provide: RedisEventDedupCache,
+      useFactory: (client: Redis): RedisEventDedupCache =>
+        new RedisEventDedupCache(client),
+      inject: [INDEXER_REDIS_CLIENT],
+    },
+    EventDedupService,
   ],
   exports: [
     IndexerService,

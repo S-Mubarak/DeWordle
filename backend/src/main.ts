@@ -1,16 +1,63 @@
 import { Logger, ValidationPipe } from '@nestjs/common';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { DataSource } from 'typeorm';
 import { AppModule } from './app.module';
 import { RateLimitHeadersInterceptor } from './common/rate-limit-headers.interceptor';
 import { MetricsService } from './dewordle/metrics/metrics.service';
 import { MetricsInterceptor } from './common/metrics.interceptor';
 import { applySecurityHeaders } from './common/security/security-headers';
 
+const DB_RETRY_ATTEMPTS = 10;
+const DB_RETRY_BASE_DELAY_MS = 2000;
+
+/**
+ * Probes the PostgreSQL connection before bootstrapping the app.
+ * Containers can start in any order, so retry transient connection
+ * failures with exponential backoff instead of crashing immediately.
+ */
+async function waitForDatabaseConnection(logger: Logger): Promise<void> {
+  const dataSource = new DataSource({
+    type: 'postgres',
+    host: process.env.DB_HOST ?? 'localhost',
+    port: Number.parseInt(process.env.DB_PORT ?? '5432', 10),
+    username: process.env.DB_USERNAME,
+    password: process.env.DB_PASSWORD,
+    database: process.env.DB_NAME,
+    ssl: process.env.DB_SSL === 'true' ? { rejectUnauthorized: false } : false,
+  });
+
+  let attempt = 1;
+  while (attempt <= DB_RETRY_ATTEMPTS) {
+    try {
+      await dataSource.initialize();
+      await dataSource.destroy();
+      logger.log('Database connection established');
+      return;
+    } catch (error) {
+      if (attempt === DB_RETRY_ATTEMPTS) {
+        logger.error(
+          `Database connection failed after ${DB_RETRY_ATTEMPTS} attempts`,
+        );
+        throw error;
+      }
+      const delayMs = DB_RETRY_BASE_DELAY_MS * 2 ** (attempt - 1);
+      logger.warn(
+        `Database connection attempt ${attempt}/${DB_RETRY_ATTEMPTS} failed. ` +
+          `Retrying in ${delayMs}ms...`,
+      );
+      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      attempt += 1;
+    }
+  }
+}
+
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
 
   try {
+    await waitForDatabaseConnection(logger);
+
     const app = await NestFactory.create(AppModule);
 
     // Issue #1212: HSTS security headers (max-age=31536000, includeSubDomains).
