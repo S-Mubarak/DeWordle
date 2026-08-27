@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import databaseConfig from './config/database.config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
@@ -25,12 +26,14 @@ import { CacheMetricsService } from './common/cache-metrics.service';
 import { CacheLoggerService } from './common/cache-logger.service';
 import { VersioningModule } from './common/versioning.module';
 import { JobModule } from './common/job.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '.env.development'],
+      load: [databaseConfig],
       validate: validateEnv,
     }),
     ThrottlerModule.forRootAsync({
@@ -71,27 +74,18 @@ import { JobModule } from './common/job.module';
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     GameSessionsModule,
+    // Issue #1221: TypeORM options now come from the dedicated
+    // database config factory (src/config/database.config.ts).
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
-      useFactory: (configService: ConfigService) => ({
-        type: 'postgres',
-        host: configService.get('DB_HOST'),
-        port: Number.parseInt(configService.get('DB_PORT') ?? '5432', 10),
-        username: configService.get('DB_USERNAME'),
-        password: configService.get('DB_PASSWORD'),
-        database: configService.get('DB_NAME'),
-        ssl:
-          configService.get('DB_SSL') === 'true'
-            ? {
-                rejectUnauthorized: false,
-              }
-            : false,
-        entities: ['dist/**/*.entity{.ts,.js}'],
-        synchronize: configService.get('NODE_ENV') === 'development',
-        logging: configService.get('NODE_ENV') === 'development',
-        migrations: ['dist/migrations/*{.ts,.js}'],
-        migrationsTableName: 'migrations',
-      }),
+      useFactory: (configService: ConfigService) => {
+        const database =
+          configService.get<ReturnType<typeof databaseConfig>>('database');
+        if (!database) {
+          throw new Error('Database configuration is not loaded');
+        }
+        return database;
+      },
       inject: [ConfigService],
     }),
     TypeOrmModule.forFeature([TestEntity, SessionProjectionEntity]),
@@ -104,6 +98,7 @@ import { JobModule } from './common/job.module';
     AppCacheModule,
     VersioningModule,
     JobModule,
+    AdminModule,
   ],
   controllers: [
     AppController,

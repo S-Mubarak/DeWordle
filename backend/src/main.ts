@@ -5,6 +5,7 @@ import { AppModule } from './app.module';
 import { RateLimitHeadersInterceptor } from './common/rate-limit-headers.interceptor';
 import { MetricsService } from './dewordle/metrics/metrics.service';
 import { MetricsInterceptor } from './common/metrics.interceptor';
+import { GlobalExceptionFilter } from './common/filters/global-exception.filter';
 
 async function bootstrap() {
   const logger = new Logger('Bootstrap');
@@ -14,6 +15,7 @@ async function bootstrap() {
 
     const metricsService = app.get(MetricsService);
     app.useGlobalInterceptors(new MetricsInterceptor(metricsService));
+    app.useGlobalFilters(new GlobalExceptionFilter());
     const allowedOrigin = process.env.FRONTEND_URL ?? 'http://localhost:3000';
     app.enableCors({
       origin: allowedOrigin,
