@@ -10,7 +10,10 @@ export interface KeyboardNavigationOptions {
   onEscape?: () => void;
   onQuestionMark?: () => void;
   enabled?: boolean;
+  isSubmitting?: boolean;
 }
+
+const ENTER_DEBOUNCE_MS = 300;
 
 export function useKeyboardNavigation(options: KeyboardNavigationOptions) {
   const {
@@ -23,10 +26,12 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions) {
     onEscape,
     onQuestionMark,
     enabled = true,
+    isSubmitting = false,
   } = options;
 
-  const handlersRef = useRef(options);
-  handlersRef.current = options;
+  const lastEnterTime = useRef(0);
+  const handlersRef = useRef({ ...options, isSubmitting });
+  handlersRef.current = { ...options, isSubmitting };
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent) => {
@@ -60,7 +65,13 @@ export function useKeyboardNavigation(options: KeyboardNavigationOptions) {
           break;
         case "Enter":
           event.preventDefault();
-          handlersRef.current.onEnter?.();
+          if (!handlersRef.current.isSubmitting) {
+            const now = Date.now();
+            if (now - lastEnterTime.current >= ENTER_DEBOUNCE_MS) {
+              lastEnterTime.current = now;
+              handlersRef.current.onEnter?.();
+            }
+          }
           break;
         case "Backspace":
           event.preventDefault();

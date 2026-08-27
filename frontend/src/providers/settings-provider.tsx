@@ -12,16 +12,19 @@ import {
 
 type GameSettings = {
   colorBlindMode: boolean;
+  soundEffects: boolean;
 };
 
 type SettingsContextValue = GameSettings & {
   setColorBlindMode: (enabled: boolean) => void;
+  setSoundEffects: (enabled: boolean) => void;
 };
 
 const STORAGE_KEY = "dewordle-settings";
 
 const defaults: GameSettings = {
   colorBlindMode: false,
+  soundEffects: false,
 };
 
 function loadSettings(): GameSettings {
@@ -62,12 +65,21 @@ export function SettingsProvider({ children }: { children: ReactNode }) {
     });
   }, []);
 
+  const setSoundEffects = useCallback((enabled: boolean) => {
+    setSettings((prev) => {
+      const next = { ...prev, soundEffects: enabled };
+      persistSettings(next);
+      return next;
+    });
+  }, []);
+
   const value = useMemo(
     () => ({
       ...settings,
       setColorBlindMode,
+      setSoundEffects,
     }),
-    [settings, setColorBlindMode],
+    [settings, setColorBlindMode, setSoundEffects],
   );
 
   return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
