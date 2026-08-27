@@ -1,4 +1,4 @@
-# ADR 0004: Frontend State Store Selection
+# ADR 0005: Frontend State Store Selection
 
 ## Status
 
