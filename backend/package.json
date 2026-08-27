@@ -50,7 +50,7 @@
     "@nestjs/swagger": "^11.2.0",
     "@nestjs/throttler": "^6.0.0",
     "@nestjs/typeorm": "^11.0.0",
-    "axios": "^1.18.1",
+    "axios": "^1.19.0",
     "bcrypt": "^6.0.0",
     "bull": "^4.16.0",
     "cache-manager": "^6.0.0",
