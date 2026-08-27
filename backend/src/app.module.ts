@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import databaseConfig from './config/database.config';
 import { ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { validateEnv } from './config/env.validation';
@@ -32,6 +33,7 @@ import { PoolPressureService } from './database/pool-pressure.service';
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env', '.env.development'],
+      load: [databaseConfig],
       validate: validateEnv,
     }),
     ThrottlerModule.forRootAsync({
@@ -72,6 +74,8 @@ import { PoolPressureService } from './database/pool-pressure.service';
     ScheduleModule.forRoot(),
     EventEmitterModule.forRoot(),
     GameSessionsModule,
+    // Issue #1221: TypeORM options now come from the dedicated
+    // database config factory (src/config/database.config.ts).
     TypeOrmModule.forRootAsync({
       imports: [ConfigModule],
       useFactory: (configService: ConfigService) => ({
@@ -136,7 +140,7 @@ import { PoolPressureService } from './database/pool-pressure.service';
     AppCacheModule,
     VersioningModule,
     JobModule,
-    HealthModule,
+    AdminModule,
   ],
   controllers: [
     AppController,
