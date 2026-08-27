@@ -145,7 +145,11 @@ export class AuthService {
       password: hashedPassword,
     });
 
-    const access_token = this.generateAccessToken(newUser.id, newUser.email);
+    const access_token = this.generateAccessToken(
+      newUser.id,
+      newUser.email,
+      newUser.role,
+    );
     const { token: refresh_token } =
       await this.refreshTokenService.generateRefreshToken(
         newUser.email,
@@ -194,7 +198,11 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
-    const access_token = this.generateAccessToken(user.id, user.email);
+    const access_token = this.generateAccessToken(
+      user.id,
+      user.email,
+      user.role,
+    );
     const { token: refresh_token } =
       await this.refreshTokenService.generateRefreshToken(
         user.email,
@@ -258,6 +266,7 @@ export class AuthService {
     const access_token = this.generateAccessToken(
       tokenData.user.id,
       tokenData.user.email,
+      tokenData.user.role,
     );
 
     return { access_token, refresh_token: newRefreshToken };
@@ -280,8 +289,12 @@ export class AuthService {
   /**
    * Internal Signature Factory Methods
    */
-  private generateAccessToken(userId: number, email: string): string {
-    const payload = { sub: userId, email };
+  private generateAccessToken(
+    userId: number,
+    email: string,
+    role: 'user' | 'admin',
+  ): string {
+    const payload = { sub: userId, email, roles: [role] };
     return this.jwtService.sign(payload, { expiresIn: ACCESS_TOKEN_EXPIRY });
   }
 }
