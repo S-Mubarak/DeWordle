@@ -19,19 +19,21 @@ export const EVENT_SCHEMAS: EventSchema[] = [
     family: "core_game",
     description: "Emitted when a player starts a new game session",
     topicFields: [
-      { name: "topic", type: "Symbol" },
+      { name: "category", type: "Symbol" },
+      { name: "action", type: "Symbol" },
       { name: "player", type: "Address" },
       { name: "day_id", type: "u32" },
     ],
     payloadFields: [{ name: "session_id", type: "BytesN<32>" }],
-    version: 1,
+    version: 2,
   },
   {
     topic: "guess_submitted",
     family: "core_game",
     description: "Emitted when a player submits a guess",
     topicFields: [
-      { name: "topic", type: "Symbol" },
+      { name: "category", type: "Symbol" },
+      { name: "action", type: "Symbol" },
       { name: "session_id", type: "BytesN<32>" },
     ],
     payloadFields: [
@@ -40,25 +42,27 @@ export const EVENT_SCHEMAS: EventSchema[] = [
       { name: "outcome_code", type: "u32" },
       { name: "is_correct", type: "bool" },
     ],
-    version: 1,
+    version: 2,
   },
   {
     topic: "session_finalized",
     family: "core_game",
     description: "Emitted when a session is finalized (won or lost)",
     topicFields: [
-      { name: "topic", type: "Symbol" },
+      { name: "category", type: "Symbol" },
+      { name: "action", type: "Symbol" },
       { name: "session_id", type: "BytesN<32>" },
     ],
     payloadFields: [{ name: "player", type: "Address" }],
-    version: 1,
+    version: 2,
   },
   {
     topic: "streak_updated",
     family: "core_game",
     description: "Emitted when a player's streak is updated",
     topicFields: [
-      { name: "topic", type: "Symbol" },
+      { name: "category", type: "Symbol" },
+      { name: "action", type: "Symbol" },
       { name: "player", type: "Address" },
     ],
     payloadFields: [
@@ -66,7 +70,7 @@ export const EVENT_SCHEMAS: EventSchema[] = [
       { name: "max", type: "u32" },
       { name: "last_day_played", type: "u32" },
     ],
-    version: 1,
+    version: 2,
   },
   {
     topic: "claimed",
@@ -98,7 +102,7 @@ export const EVENT_SCHEMAS: EventSchema[] = [
   },
 ];
 
-export const SCHEMA_VERSION = 1;
+export const SCHEMA_VERSION = 2;
 
 export function getSchemaByTopic(topic: string): EventSchema | undefined {
   return EVENT_SCHEMAS.find((s) => s.topic === topic);

@@ -42,6 +42,14 @@ pub enum CoreGameError {
     ContractPaused = 14,
 }
 
+#[derive(Clone)]
+#[contracttype]
+pub struct GameConfig {
+    pub word_length: u32,
+    pub max_attempts: u32,
+    pub status: bool,
+}
+
 #[contract]
 pub struct CoreGameContract;
 
@@ -58,18 +66,28 @@ impl CoreGameContract {
             .set(&Symbol::new(&env, "initialized"), &true);
         env.storage().instance().set(&DataKey::Paused, &false);
         env.events()
-            .publish((Symbol::new(&env, "core_game_initialized"),), admin);
+            .publish((Symbol::new(&env, "core_game"), Symbol::new(&env, "initialized")), admin);
     }
 
     pub fn pause(env: Env, paused: bool) {
         require_admin(&env);
         env.storage().instance().set(&DataKey::Paused, &paused);
         env.events()
-            .publish((Symbol::new(&env, "core_game_paused"),), paused);
+            .publish((Symbol::new(&env, "core_game"), Symbol::new(&env, "paused")), paused);
     }
 
     pub fn is_paused(env: Env) -> bool {
         env.storage().instance().get(&DataKey::Paused).unwrap_or(false)
+    }
+
+    pub fn get_game_config(env: Env) -> GameConfig {
+        let day_id = current_day_id(&env);
+        let config = Self::get_day_config_internal(&env, day_id);
+        GameConfig {
+            word_length: 5,
+            max_attempts: config.max_attempts,
+            status: config.published,
+        }
     }
 
     pub fn set_day_config(
@@ -98,7 +116,7 @@ impl CoreGameContract {
             .set(&DataKey::DayConfig(day_id), &config);
 
         env.events()
-            .publish((Symbol::new(&env, "day_published"), day_id), config);
+            .publish((Symbol::new(&env, "day"), Symbol::new(&env, "published"), day_id), config);
     }
 
     pub fn create_session(env: Env, player: Address, day_id: u32, nonce: u32) -> BytesN<32> {
@@ -139,7 +157,7 @@ impl CoreGameContract {
         env.storage().persistent().set(&nonce_key, &true);
 
         env.events().publish(
-            (Symbol::new(&env, "session_started"), player, day_id),
+            (Symbol::new(&env, "session"), Symbol::new(&env, "started"), player, day_id),
             session_id.clone(),
         );
 
@@ -194,7 +212,7 @@ impl CoreGameContract {
             .set(&DataKey::Session(session_id.clone()), &session);
 
         env.events().publish(
-            (Symbol::new(&env, "guess_submitted"), session_id),
+            (Symbol::new(&env, "guess"), Symbol::new(&env, "submitted"), session_id),
             (guess_commitment, result.clone()),
         );
 
@@ -228,7 +246,7 @@ impl CoreGameContract {
         Self::update_streak(&env, &player);
 
         env.events()
-            .publish((Symbol::new(&env, "session_finalized"), session_id), player);
+            .publish((Symbol::new(&env, "session"), Symbol::new(&env, "finalized"), session_id), player);
 
         session
     }
@@ -324,7 +342,7 @@ impl CoreGameContract {
             .set(&DataKey::Streak(player.clone()), &streak);
 
         env.events()
-            .publish((Symbol::new(env, "streak_updated"), player), streak);
+            .publish((Symbol::new(env, "streak"), Symbol::new(env, "updated"), player.clone()), streak);
     }
 
     fn require_not_paused(env: &Env) {
@@ -527,11 +545,103 @@ mod tests {
 
     #[test]
     fn event_topics_match_fixtures() {
-        assert_eq!(fixtures::TOPIC_SESSION_STARTED, "session_started");
-        assert_eq!(fixtures::TOPIC_GUESS_SUBMITTED, "guess_submitted");
-        assert_eq!(fixtures::TOPIC_SESSION_FINALIZED, "session_finalized");
-        assert_eq!(fixtures::TOPIC_DAY_PUBLISHED, "day_published");
-        assert_eq!(fixtures::TOPIC_STREAK_UPDATED, "streak_updated");
-        assert_eq!(fixtures::TOPIC_CORE_GAME_PAUSED, "core_game_paused");
+        assert_eq!(fixtures::TOPIC_SESSION_STARTED, ("session", "started"));
+        assert_eq!(fixtures::TOPIC_GUESS_SUBMITTED, ("guess", "submitted"));
+        assert_eq!(fixtures::TOPIC_SESSION_FINALIZED, ("session", "finalized"));
+        assert_eq!(fixtures::TOPIC_DAY_PUBLISHED, ("day", "published"));
+        assert_eq!(fixtures::TOPIC_STREAK_UPDATED, ("streak", "updated"));
+        assert_eq!(fixtures::TOPIC_CORE_GAME_PAUSED, ("core_game", "paused"));
+    }
+
+    #[test]
+    fn test_game_loss_on_sixth_incorrect_guess() {
+        let (env, _, contract_id) = setup();
+        let client = CoreGameContractClient::new(&env, &contract_id);
+        publish_day(&env, &client, 1);
+        let player = Address::generate(&env);
+        let session_id = client.create_session(&player, &1, &0);
+        for i in 0..5u8 {
+            let commitment = BytesN::from_array(&env, &[i + 2; 32]);
+            let res = client.submit_guess(&player, &session_id, &commitment, &0, &false);
+            assert_eq!(res.attempt_no, (i + 1) as u32);
+            assert!(!res.is_correct);
+            let s = client.get_session(&session_id);
+            assert!(matches!(s.status, SessionStatus::InProgress));
+        }
+        let final_commitment = BytesN::from_array(&env, &[7u8; 32]);
+        let res = client.submit_guess(&player, &session_id, &final_commitment, &0, &false);
+        assert_eq!(res.attempt_no, 6);
+        assert!(!res.is_correct);
+        let session = client.get_session(&session_id);
+        assert!(matches!(session.status, SessionStatus::Lost));
+    }
+
+    #[test]
+    fn test_game_win_on_sixth_correct_guess() {
+        let (env, _, contract_id) = setup();
+        let client = CoreGameContractClient::new(&env, &contract_id);
+        publish_day(&env, &client, 1);
+        let player = Address::generate(&env);
+        let session_id = client.create_session(&player, &1, &0);
+        for i in 0..5u8 {
+            let commitment = BytesN::from_array(&env, &[i + 2; 32]);
+            client.submit_guess(&player, &session_id, &commitment, &0, &false);
+        }
+        let final_commitment = BytesN::from_array(&env, &[7u8; 32]);
+        let res = client.submit_guess(&player, &session_id, &final_commitment, &0, &true);
+        assert_eq!(res.attempt_no, 6);
+        assert!(res.is_correct);
+        let session = client.get_session(&session_id);
+        assert!(matches!(session.status, SessionStatus::Won));
+    }
+
+    #[test]
+    #[should_panic(expected = "Error(Contract, #10)")]
+    fn test_no_guesses_accepted_after_sixth_attempt() {
+        let (env, _, contract_id) = setup();
+        let client = CoreGameContractClient::new(&env, &contract_id);
+        publish_day(&env, &client, 1);
+        let player = Address::generate(&env);
+        let session_id = client.create_session(&player, &1, &0);
+        for i in 0..6u8 {
+            let commitment = BytesN::from_array(&env, &[i + 2; 32]);
+            client.submit_guess(&player, &session_id, &commitment, &0, &false);
+        }
+        let extra_commitment = BytesN::from_array(&env, &[8u8; 32]);
+        client.submit_guess(&player, &session_id, &extra_commitment, &0, &false);
+    }
+
+    #[test]
+    fn test_get_game_config() {
+        let (env, _, contract_id) = setup();
+        let client = CoreGameContractClient::new(&env, &contract_id);
+        publish_day(&env, &client, 0); // day_id 0 to match default current day calculated from timestamp 0
+        let config = client.get_game_config();
+        assert_eq!(config.word_length, 5);
+        assert_eq!(config.max_attempts, 6);
+        assert!(config.status);
+    }
+
+    #[test]
+    fn test_event_topic_structure() {
+        let (env, _, contract_id) = setup();
+        let client = CoreGameContractClient::new(&env, &contract_id);
+        
+        let events = env.events().all();
+        assert!(events.len() > 0);
+        let event = events.get(0).unwrap();
+        assert_eq!(event.0, contract_id);
+        let topics = event.1;
+        assert_eq!(topics.len(), 2);
+        assert_eq!(topics.get(0).unwrap(), Symbol::new(&env, "core_game").into());
+        assert_eq!(topics.get(1).unwrap(), Symbol::new(&env, "initialized").into());
+
+        client.pause(&true);
+        let events = env.events().all();
+        let event = events.get(events.len() - 1).unwrap();
+        assert_eq!(event.1.len(), 2);
+        assert_eq!(event.1.get(0).unwrap(), Symbol::new(&env, "core_game").into());
+        assert_eq!(event.1.get(1).unwrap(), Symbol::new(&env, "paused").into());
     }
 }
+

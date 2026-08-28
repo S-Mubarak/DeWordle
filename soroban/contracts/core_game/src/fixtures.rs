@@ -2,36 +2,37 @@
 //! These fixtures document the expected event topic/payload shapes.
 
 /// Event: session_started
-/// topic: ("session_started", player: Address, day_id: u32)
+/// topic: ("session", "started", player: Address, day_id: u32)
 /// payload: session_id: BytesN<32>
-pub const TOPIC_SESSION_STARTED: &str = "session_started";
+pub const TOPIC_SESSION_STARTED: (&str, &str) = ("session", "started");
 
 /// Event: guess_submitted
-/// topic: ("guess_submitted", session_id: BytesN<32>)
+/// topic: ("guess", "submitted", session_id: BytesN<32>)
 /// payload: (guess_commitment: BytesN<32>, result: GuessResult)
-pub const TOPIC_GUESS_SUBMITTED: &str = "guess_submitted";
+pub const TOPIC_GUESS_SUBMITTED: (&str, &str) = ("guess", "submitted");
 
 /// Event: session_finalized
-/// topic: ("session_finalized", session_id: BytesN<32>)
+/// topic: ("session", "finalized", session_id: BytesN<32>)
 /// payload: player: Address
-pub const TOPIC_SESSION_FINALIZED: &str = "session_finalized";
+pub const TOPIC_SESSION_FINALIZED: (&str, &str) = ("session", "finalized");
 
 /// Event: day_published
-/// topic: ("day_published", day_id: u32)
+/// topic: ("day", "published", day_id: u32)
 /// payload: DayConfig
-pub const TOPIC_DAY_PUBLISHED: &str = "day_published";
+pub const TOPIC_DAY_PUBLISHED: (&str, &str) = ("day", "published");
 
 /// Event: streak_updated
-/// topic: ("streak_updated", player: Address)
+/// topic: ("streak", "updated", player: Address)
 /// payload: PlayerStreak
-pub const TOPIC_STREAK_UPDATED: &str = "streak_updated";
+pub const TOPIC_STREAK_UPDATED: (&str, &str) = ("streak", "updated");
 
 /// Event: core_game_paused
-/// topic: ("core_game_paused",)
+/// topic: ("core_game", "paused")
 /// payload: bool
-pub const TOPIC_CORE_GAME_PAUSED: &str = "core_game_paused";
+pub const TOPIC_CORE_GAME_PAUSED: (&str, &str) = ("core_game", "paused");
 
 /// Event: core_game_initialized
-/// topic: ("core_game_initialized",)
+/// topic: ("core_game", "initialized")
 /// payload: admin: Address
-pub const TOPIC_CORE_GAME_INITIALIZED: &str = "core_game_initialized";
+pub const TOPIC_CORE_GAME_INITIALIZED: (&str, &str) = ("core_game", "initialized");
+
